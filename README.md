@@ -39,3 +39,8 @@ hand set.
 
 For the Raspberry Pi, clone the https://github.com/ninjablocks/433Utils project to
 compile a sniffer tool and transmission commands.
+
+### Improvements
+
+Added support for receiving and decoding BL999 thermo/hydro sensors (marked as protocol #8).
+Example for using BL999 thermo/hydro sensor can be found in ReceiveDemo_BL999\ReceiveDemo_BL999.ino
