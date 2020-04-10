@@ -81,6 +81,7 @@ class RCSwitch {
     void send(const char* sCodeWord);
     
     #if not defined( RCSwitchDisableReceiving )
+	
     void enableReceive(int interrupt);
     void enableReceive();
     void disableReceive();
@@ -92,13 +93,21 @@ class RCSwitch {
     unsigned int getReceivedDelay();
     unsigned int getReceivedProtocol();
     unsigned int* getReceivedRawdata();
+	
+	byte getDeviceID();
+	byte getChannelID();
+	float getTemperature();
+	byte getHumidity();
+	byte getBattery();
+	
     #endif
   
     void enableTransmit(int nTransmitterPin);
     void disableTransmit();
     void setPulseLength(int nPulseLength);
     void setRepeatTransmit(int nRepeatTransmit);
-    #if not defined( RCSwitchDisableReceiving )
+    
+	#if not defined( RCSwitchDisableReceiving )
     void setReceiveTolerance(int nPercent);
     #endif
 
@@ -120,10 +129,9 @@ class RCSwitch {
     struct Protocol {
         /** base pulse length in microseconds, e.g. 350 */
         uint16_t pulseLength;
-
         HighLow syncFactor;
-        HighLow zero;
-        HighLow one;
+        HighLow zeroBit;
+        HighLow oneBit;
 
         /**
          * If true, interchange high and low logic levels in all transmissions.
@@ -153,7 +161,8 @@ class RCSwitch {
     char* getCodeWordB(int nGroupNumber, int nSwitchNumber, bool bStatus);
     char* getCodeWordC(char sFamily, int nGroup, int nDevice, bool bStatus);
     char* getCodeWordD(char group, int nDevice, bool bStatus);
-    void transmit(HighLow pulses);
+//	unsigned int bitReverse(unsigned int number, byte lengh);
+	 void transmit(HighLow pulses);
 
     #if not defined( RCSwitchDisableReceiving )
     static void handleInterrupt();
@@ -172,7 +181,14 @@ class RCSwitch {
     volatile static unsigned int nReceivedDelay;
     volatile static unsigned int nReceivedProtocol;
     const static unsigned int nSeparationLimit;
-    /* 
+    
+	static byte nDeviceID;
+	static byte nChannelID;
+	static float nTemperature;
+	static byte nHumidity;
+	static byte nBattery;
+	
+	/* 
      * timings[0] contains sync timing, followed by a number of bits
      */
     static unsigned int timings[RCSWITCH_MAX_CHANGES];

@@ -13,7 +13,6 @@
   - Robert ter Vehn / <first name>.<last name>(at)gmail(dot)com
   - Johann Richard / <first name>.<last name>(at)gmail(dot)com
   - Vlad Gheorghe / <first name>.<last name>(at)gmail(dot)com https://github.com/vgheo
-  - Matias Cuenca-Acuna 
   
   Project home: https://github.com/sui77/rc-switch/
 
@@ -51,7 +50,7 @@
 
 
 /* Format for protocol definitions:
- * {pulselength, Sync bit, "0" bit, "1" bit, invertedSignal}
+ * {pulselength, Sync bit, "0" bit, "1" bit}
  * 
  * pulselength: pulse length in microseconds, e.g. 350
  * Sync bit: {1, 31} means 1 high pulse and 31 low pulses
@@ -81,11 +80,7 @@ static const RCSwitch::Protocol PROGMEM proto[] = {
   { 500, {  6, 14 }, {  1,  2 }, {  2,  1 }, false },    // protocol 5
   { 450, { 23,  1 }, {  1,  2 }, {  2,  1 }, true },     // protocol 6 (HT6P20B)
   { 150, {  2, 62 }, {  1,  6 }, {  6,  1 }, false },    // protocol 7 (HS2303-PT, i. e. used in AUKEY Remote)
-  { 200, {  3, 130}, {  7, 16 }, {  3,  16}, false},     // protocol 8 Conrad RS-200 RX
-  { 200, { 130, 7 }, {  16, 7 }, { 16,  3 }, true},      // protocol 9 Conrad RS-200 TX
-  { 365, { 18,  1 }, {  3,  1 }, {  1,  3 }, true },     // protocol 10 (1ByOne Doorbell)
-  { 270, { 36,  1 }, {  1,  2 }, {  2,  1 }, true },     // protocol 11 (HT12E)
-  { 320, { 36,  1 }, {  1,  2 }, {  2,  1 }, true }      // protocol 12 (SM5212)
+  { 400, {  1, 22 }, {  1,  5 }, {  1, 10 }, false }     // protocol 8 (BL999 thermo/hydro sensor)
 };
 
 enum {
@@ -103,6 +98,11 @@ const unsigned int RCSwitch::nSeparationLimit = 4300;
 // according to discussion on issue #14 it might be more suitable to set the separation
 // limit to the same time as the 'low' part of the sync signal for the current protocol.
 unsigned int RCSwitch::timings[RCSWITCH_MAX_CHANGES];
+byte RCSwitch::nDeviceID;
+byte RCSwitch::nChannelID;
+float RCSwitch::nTemperature;
+byte RCSwitch::nHumidity;
+byte RCSwitch::nBattery;
 #endif
 
 RCSwitch::RCSwitch() {
@@ -505,9 +505,9 @@ void RCSwitch::send(unsigned long code, unsigned int length) {
   for (int nRepeat = 0; nRepeat < nRepeatTransmit; nRepeat++) {
     for (int i = length-1; i >= 0; i--) {
       if (code & (1L << i))
-        this->transmit(protocol.one);
+        this->transmit(protocol.oneBit);
       else
-        this->transmit(protocol.zero);
+        this->transmit(protocol.zeroBit);
     }
     this->transmit(protocol.syncFactor);
   }
@@ -596,13 +596,61 @@ unsigned int* RCSwitch::getReceivedRawdata() {
   return RCSwitch::timings;
 }
 
+byte RCSwitch::getDeviceID() {
+  return RCSwitch::nDeviceID;
+}
+
+byte RCSwitch::getChannelID() {
+  return RCSwitch::nChannelID;
+}
+
+float RCSwitch::getTemperature() {
+    return RCSwitch::nTemperature;
+}
+
+byte RCSwitch::getHumidity() {
+	return RCSwitch::nHumidity;
+}
+
+byte RCSwitch::getBattery() {
+	return RCSwitch::nBattery;
+}
+
 /* helper function for the receiveProtocol method */
 static inline unsigned int diff(int A, int B) {
   return abs(A - B);
 }
 
-/**
+unsigned int bitReverse(unsigned int number, byte lengh) {
+  unsigned int result = 0;
+  for(byte i = 0; i < lengh; i++) {
+    result <<= 1;
+    result |= number & 1;
+    number >>= 1;
+  }
+  return result;
+}
+
+/* For protocols that start low, the sync period looks like
+ *               _________
+ * _____________|         |XXXXXXXXXXXX|
  *
+ * |--1st dur--|-2nd dur-|-Start data-|
+ *
+ * The 3rd saved duration starts the data.
+ *
+ * For protocols that start high, the sync period looks like
+ *
+ *  ______________
+ * |              |____________|XXXXXXXXXXXXX|
+ *
+ * |-filtered out-|--1st dur--|--Start data--|
+ *
+ * The 2nd saved duration starts the data
+ */
+
+/**
+ ****** Receive Protocol ********
  */
 bool RECEIVE_ATTR RCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
 #if defined(ESP8266) || defined(ESP32)
@@ -612,51 +660,100 @@ bool RECEIVE_ATTR RCSwitch::receiveProtocol(const int p, unsigned int changeCoun
     memcpy_P(&pro, &proto[p-1], sizeof(Protocol));
 #endif
 
-    unsigned long code = 0;
+    unsigned long data = 0;			// max 4 bytes (8 nibbles)
+	byte checkSum = 0;				// for 9 nibble = checkSum
     //Assuming the longer pulse length is the pulse captured in timings[0]
     const unsigned int syncLengthInPulses =  ((pro.syncFactor.low) > (pro.syncFactor.high)) ? (pro.syncFactor.low) : (pro.syncFactor.high);
     const unsigned int delay = RCSwitch::timings[0] / syncLengthInPulses;
     const unsigned int delayTolerance = delay * RCSwitch::nReceiveTolerance / 100;
     
-    /* For protocols that start low, the sync period looks like
-     *               _________
-     * _____________|         |XXXXXXXXXXXX|
-     *
-     * |--1st dur--|-2nd dur-|-Start data-|
-     *
-     * The 3rd saved duration starts the data.
-     *
-     * For protocols that start high, the sync period looks like
-     *
-     *  ______________
-     * |              |____________|XXXXXXXXXXXXX|
-     *
-     * |-filtered out-|--1st dur--|--Start data--|
-     *
-     * The 2nd saved duration starts the data
-     */
     const unsigned int firstDataTiming = (pro.invertedSignal) ? (2) : (1);
 
     for (unsigned int i = firstDataTiming; i < changeCount - 1; i += 2) {
-        code <<= 1;
-        if (diff(RCSwitch::timings[i], delay * pro.zero.high) < delayTolerance &&
-            diff(RCSwitch::timings[i + 1], delay * pro.zero.low) < delayTolerance) {
-            // zero
-        } else if (diff(RCSwitch::timings[i], delay * pro.one.high) < delayTolerance &&
-                   diff(RCSwitch::timings[i + 1], delay * pro.one.low) < delayTolerance) {
-            // one
-            code |= 1;
-        } else {
-            // Failed
-            return false;
-        }
+        if (i < 64+firstDataTiming)			// only 8 nibbles = 4 bytes
+			data <<= 1;
+		else checkSum <<= 1;				// 9 nibble - check sum
+		if (diff(RCSwitch::timings[i], delay * pro.zeroBit.high) < delayTolerance &&
+			diff(RCSwitch::timings[i + 1], delay * pro.zeroBit.low) < delayTolerance) {
+			// zero bit
+		} else if (diff(RCSwitch::timings[i], delay * pro.oneBit.high) < delayTolerance &&
+				   diff(RCSwitch::timings[i + 1], delay * pro.oneBit.low) < delayTolerance) {
+			// one bit
+			if (i < 64+firstDataTiming)			// only 8 nibbles = 4 bytes
+				data |= 1;
+			else checkSum |= 1;					// 9 nibble - check sum
+		} else {
+			// Failed
+			return false;
+		}
     }
 
     if (changeCount > 7) {    // ignore very short transmissions: no device sends them, so this must be noise
-        RCSwitch::nReceivedValue = code;
+        
+		RCSwitch::nReceivedValue = data;
         RCSwitch::nReceivedBitlength = (changeCount - 1) / 2;
         RCSwitch::nReceivedDelay = delay;
         RCSwitch::nReceivedProtocol = p;
+		
+		if (p == 8) {				// for protocol 8 (BL999)
+		
+			// checkSum = sum of nibbles
+			byte sum = 0;
+			unsigned long data1 = data;
+			for (int i=0; i<8; i++) {
+				sum += bitReverse(data1 & 0xF, 4);
+				data1 >>= 4;
+			}
+			sum &= 0xF;
+			sum = bitReverse(sum, 4);
+			//RCSwitch::nCheckSum = checkSum;
+			//RCSwitch::nCheckSumMatch = (sum == checkSum);
+			
+			if (sum == checkSum) {
+			
+				RCSwitch::nDeviceID = data >> 24 & 0xFF;			// device ID
+				RCSwitch::nChannelID = (data >> 26) & 0x3;			// channel ID
+				RCSwitch::nBattery = ((data >> 23) & 0x1)^1;		// battery status
+				//RCSwitch::unknown = (data >> 20) & 0x3;			// unknown
+				
+				//Temperature is stored in T4,T5,T6 nibbles, lowest nibble - first
+				//since we already reversed bits order in these nibbles
+				//all we have to do is to reverse nibbles order
+				
+				//temperature = (((int)bl999_data[5] << 8) | ((int)bl999_data[4] << 4) | (int)bl999_data[3]);
+
+				int temperature = (RCSwitch::nReceivedValue >> 8) & 0xFFF;
+				temperature = bitReverse(temperature, 12);
+							   
+				//if ((bl999_data[5] & 1) == 1) {
+				if ((temperature & 0x100) == 1) {
+					
+					//negative number, use two's compliment conversion
+					temperature = ~temperature + 1;
+
+					//clear higher bits and convert to negative
+					temperature = -1 * (temperature & 0xFFF);
+				}
+
+				RCSwitch::nTemperature = temperature/10.0;
+				
+				//Humidity is stored in nibbles T7,T8
+				//since bits in these nibbles are already in reversed order
+				//we just have to get number by reversing nibbles orderßßß
+				
+				//int humidity = ((int)bl999_data[7] << 4) | (int)bl999_data[6];
+				byte humidity = (RCSwitch::nReceivedValue) & 0xFF;
+
+				//negative number, use two's compliment conversion
+				humidity = ~humidity + 1;
+
+				//humidity is stored as 100 - humidity
+				RCSwitch::nHumidity = 100 - (byte)humidity;
+			
+			}
+			
+		}
+		
         return true;
     }
 
@@ -675,7 +772,7 @@ void RECEIVE_ATTR RCSwitch::handleInterrupt() {
   if (duration > RCSwitch::nSeparationLimit) {
     // A long stretch without signal level change occurred. This could
     // be the gap between two transmission.
-    if ((repeatCount==0) || (diff(duration, RCSwitch::timings[0]) < 200)) {
+    if (diff(duration, RCSwitch::timings[0]) < 200) {
       // This long signal is close in length to the long signal which
       // started the previously recorded timings; this suggests that
       // it may indeed by a a gap between two transmissions (we assume
