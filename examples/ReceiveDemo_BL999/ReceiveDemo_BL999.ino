@@ -12,7 +12,7 @@
 RCSwitch mySwitch = RCSwitch();
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   mySwitch.enableReceive(0);  // Receiver on interrupt 0 => that is pin #2
 }
 
@@ -42,8 +42,8 @@ static char * dec2binWzerofill(unsigned long Dec, unsigned int bitLength);
 void output(unsigned long value, unsigned int length, unsigned int delay, unsigned int* raw, unsigned int protocol, byte deviceID, byte channelID, float temperature, byte humidity, byte battery) {
 
   const char* b = dec2binWzerofill(value, length);
-  Serial.print("Value: ");
-  Serial.print(value);
+  Serial.print("Data (HEX): ");
+  Serial.print(value, HEX);
   Serial.print(" (");
   Serial.print( length );
   Serial.print("Bit) Binary: ");
