@@ -63,16 +63,19 @@ void output(unsigned long value, unsigned int length, unsigned int delay, unsign
   }
   Serial.println();
   
-  Serial.print("DeviceID: ");
-  Serial.print(deviceID);
-  Serial.print(" ChannelID: ");
-  Serial.print(channelID);
-  Serial.print(" Temperature: ");
-  Serial.print(temperature);
-  Serial.print(" Humidity: ");
-  Serial.print(humidity);
-  Serial.print(" Battery: ");
-  Serial.print(battery);
+  if (protocol == 8) {
+	  Serial.print("DeviceID: ");
+	  Serial.print(deviceID);
+	  Serial.print(" ChannelID: ");
+	  Serial.print(channelID);
+	  Serial.print(" Temperature: ");
+	  Serial.print(temperature);
+	  Serial.print(" Humidity: ");
+	  Serial.print(humidity);
+	  Serial.print(" Battery: ");
+	  Serial.print(battery);
+	  Serial.println();
+  }
   
   Serial.println();
 }
