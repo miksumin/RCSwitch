@@ -48,7 +48,6 @@
     #define RECEIVE_ATTR
 #endif
 
-
 /* Format for protocol definitions:
  * {pulselength, Sync bit, "0" bit, "1" bit}
  * 
@@ -653,6 +652,7 @@ unsigned int bitReverse(unsigned int number, byte lengh) {
  ****** Receive Protocol ********
  */
 bool RECEIVE_ATTR RCSwitch::receiveProtocol(const int p, unsigned int changeCount) {
+
 #if defined(ESP8266) || defined(ESP32)
     const Protocol &pro = proto[p-1];
 #else
@@ -726,7 +726,7 @@ bool RECEIVE_ATTR RCSwitch::receiveProtocol(const int p, unsigned int changeCoun
 				temperature = bitReverse(temperature, 12);
 							   
 				//if ((bl999_data[5] & 1) == 1) {
-				if ((temperature & 0x100) == 1) {
+				if ((temperature & 0x800)) {
 					
 					//negative number, use two's compliment conversion
 					temperature = ~temperature + 1;
