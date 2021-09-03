@@ -92,7 +92,7 @@ static const RCSwitch::Protocol PROGMEM proto[] = {
   { 270, { 36,  1 }, {  1,  2 }, {  2,  1 }, true },     // protocol 11 (HT12E)
   { 320, { 36,  1 }, {  1,  2 }, {  2,  1 }, true },     // protocol 12 (SM5212)
   //
-  { 400, {  1, 22 }, {  1,  5 }, {  1, 10 }, false },    // protocol 13 (BL999 thermo/hydro sensor), Auriol H13726, Ventus WS155, Hama EWS 1500, Meteoscan W155/W160
+  { 400, {  1, 22 }, {  1,  5 }, {  1, 10 }, false },    // protocol 13 (BL999 thermo/hydro sensor)
   { 275, {  2, 14 }, {  2,  3 }, {  2, 7 }, false },    // protocol 14 (Garin WS-2) (3850/550/850/1900)
   //
 };
