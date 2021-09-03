@@ -42,5 +42,11 @@ compile a sniffer tool and transmission commands.
 
 ### Improvements
 
-Added support for receiving and decoding BL999 thermo/hydro sensors (marked as protocol #8).
+Added support for receiving and decoding Manchester encoded RF transitions for Cresta weather 
+sensor protocol (https://kipdf.com/cresta-weather-sensor-protocol_5ae9eab67f8b9a40528b45e3.html), 
+marked as protocol #0.
+
+Added support for receiving and decoding BL999 thermo/hydro sensors (marked as protocol #13).
 Example for using BL999 thermo/hydro sensor can be found in ReceiveDemo_BL999\ReceiveDemo_BL999.ino
+
+Added support for receiving and decoding Garin WS-2 protocol (marked as protocol #14).
